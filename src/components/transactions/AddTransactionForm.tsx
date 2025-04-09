@@ -35,7 +35,7 @@ const transactionSchema = z.object({
 type TransactionFormValues = z.infer<typeof transactionSchema>;
 
 interface Transaction {
-  id: number | string;
+  id: string; // Updated to be consistently string
   date: string;
   type: string;
   assetName: string;

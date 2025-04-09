@@ -25,7 +25,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 
 interface Transaction {
-  id: number | string;
+  id: string; // Changed to always be string for consistency
   date: string;
   type: string;
   assetName: string;
@@ -49,8 +49,12 @@ const TransactionTable = () => {
   useEffect(() => {
     const fetchTransactions = async () => {
       if (!user) {
-        // If not authenticated, use mock data
-        setData(mockTransactions);
+        // If not authenticated, use mock data but ensure IDs are strings
+        const formattedMockTransactions = mockTransactions.map(t => ({
+          ...t,
+          id: String(t.id) // Convert ID to string
+        }));
+        setData(formattedMockTransactions);
         setIsLoading(false);
         return;
       }
@@ -64,12 +68,16 @@ const TransactionTable = () => {
         if (error) {
           console.error('Error fetching transactions:', error);
           toast.error('Failed to load transactions');
-          // Fallback to mock data if there's an error
-          setData(mockTransactions);
+          // Fallback to mock data if there's an error, ensuring IDs are strings
+          const formattedMockTransactions = mockTransactions.map(t => ({
+            ...t,
+            id: String(t.id) // Convert ID to string
+          }));
+          setData(formattedMockTransactions);
         } else {
           // Map the Supabase data format to our component's format
           const formattedTransactions = transactions.map(t => ({
-            id: t.id,
+            id: String(t.id), // Ensure ID is a string
             date: t.date,
             type: t.type,
             assetName: t.asset_name,
@@ -83,8 +91,12 @@ const TransactionTable = () => {
         }
       } catch (err) {
         console.error('Unexpected error:', err);
-        // Fallback to mock data
-        setData(mockTransactions);
+        // Fallback to mock data, ensuring IDs are strings
+        const formattedMockTransactions = mockTransactions.map(t => ({
+          ...t,
+          id: String(t.id) // Convert ID to string
+        }));
+        setData(formattedMockTransactions);
       } finally {
         setIsLoading(false);
       }
@@ -108,7 +120,7 @@ const TransactionTable = () => {
     setIsEditDialogOpen(true);
   };
   
-  const handleDelete = async (id: number | string) => {
+  const handleDelete = async (id: string) => { // Updated to accept only string
     if (!user) {
       setData(data.filter(transaction => transaction.id !== id));
       toast.success('Transaction deleted successfully');
@@ -137,7 +149,8 @@ const TransactionTable = () => {
   
   const handleAddTransaction = async (newTransaction: Omit<Transaction, 'id'>) => {
     if (!user) {
-      const mockId = Math.max(...data.map(t => typeof t.id === 'number' ? t.id : 0), 0) + 1;
+      // Generate a string ID for mock data
+      const mockId = String(Math.max(...data.map(t => parseInt(t.id)), 0) + 1);
       setData([{ ...newTransaction, id: mockId }, ...data]);
       setIsAddDialogOpen(false);
       toast.success('Transaction added successfully');
@@ -175,9 +188,9 @@ const TransactionTable = () => {
       if (fetchError) {
         console.error('Error fetching updated transactions:', fetchError);
       } else {
-        // Map the Supabase data format to our component's format
+        // Map the Supabase data format to our component's format, ensuring IDs are strings
         const formattedTransactions = updatedTransactions.map(t => ({
-          id: t.id,
+          id: String(t.id), // Ensure ID is a string
           date: t.date,
           type: t.type,
           assetName: t.asset_name,
@@ -221,7 +234,7 @@ const TransactionTable = () => {
           total: updatedTransaction.total,
           notes: updatedTransaction.notes || null
         })
-        .eq('id', updatedTransaction.id);
+        .eq('id', updatedTransaction.id); // Now id is always a string
 
       if (error) {
         console.error('Error updating transaction:', error);
@@ -240,7 +253,7 @@ const TransactionTable = () => {
       } else {
         // Map the Supabase data format to our component's format
         const formattedTransactions = updatedTransactions.map(t => ({
-          id: t.id,
+          id: String(t.id), // Ensure ID is a string
           date: t.date,
           type: t.type,
           assetName: t.asset_name,
