@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { User } from '@supabase/supabase-js';
 
 const navItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -24,6 +25,17 @@ const Navbar = () => {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+  
+  const getUserDisplayName = (user: User | null) => {
+    if (!user) return '';
+    return user.user_metadata?.full_name || user.email || '';
+  };
+  
+  const getInitials = (user: User | null) => {
+    if (!user) return '';
+    const name = getUserDisplayName(user);
+    return name.charAt(0).toUpperCase();
   };
   
   const NavLinks = () => (
@@ -71,10 +83,10 @@ const Navbar = () => {
             <>
               <div className="hidden md:flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user.profileImage} alt={user.fullName} />
-                  <AvatarFallback>{user.fullName.charAt(0)}</AvatarFallback>
+                  <AvatarImage src={user.user_metadata?.avatar_url} alt={getUserDisplayName(user)} />
+                  <AvatarFallback>{getInitials(user)}</AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-medium">{user.fullName}</span>
+                <span className="text-sm font-medium">{getUserDisplayName(user)}</span>
                 <Button 
                   variant="ghost" 
                   size="icon"
@@ -112,10 +124,10 @@ const Navbar = () => {
                   <div className="mt-auto border-t pt-4 flex flex-col">
                     <div className="flex items-center space-x-3 mb-4">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.profileImage} alt={user.fullName} />
-                        <AvatarFallback>{user.fullName.charAt(0)}</AvatarFallback>
+                        <AvatarImage src={user.user_metadata?.avatar_url} alt={getUserDisplayName(user)} />
+                        <AvatarFallback>{getInitials(user)}</AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">{user.fullName}</span>
+                      <span className="text-sm font-medium">{getUserDisplayName(user)}</span>
                     </div>
                     <Button 
                       variant="outline" 
