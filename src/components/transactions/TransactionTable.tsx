@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -16,14 +16,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { transactions } from '@/lib/mockData';
-import { Edit, MoreHorizontal, Search, Trash } from 'lucide-react';
+import { transactions as mockTransactions } from '@/lib/mockData';
+import { Edit, MoreHorizontal, Search, Trash, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from '@/components/ui/dialog';
 import AddTransactionForm from './AddTransactionForm';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 
 interface Transaction {
-  id: number;
+  id: number | string;
   date: string;
   type: string;
   assetName: string;
@@ -36,10 +38,60 @@ interface Transaction {
 
 const TransactionTable = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [data, setData] = useState<Transaction[]>(transactions);
+  const [data, setData] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
+  const { user } = useAuth();
+  
+  // Fetch transactions from Supabase on component mount
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!user) {
+        // If not authenticated, use mock data
+        setData(mockTransactions);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const { data: transactions, error } = await supabase
+          .from('transactions')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching transactions:', error);
+          toast.error('Failed to load transactions');
+          // Fallback to mock data if there's an error
+          setData(mockTransactions);
+        } else {
+          // Map the Supabase data format to our component's format
+          const formattedTransactions = transactions.map(t => ({
+            id: t.id,
+            date: t.date,
+            type: t.type,
+            assetName: t.asset_name,
+            assetSymbol: t.asset_symbol,
+            quantity: Number(t.quantity),
+            price: Number(t.price),
+            total: Number(t.total),
+            notes: t.notes || undefined
+          }));
+          setData(formattedTransactions);
+        }
+      } catch (err) {
+        console.error('Unexpected error:', err);
+        // Fallback to mock data
+        setData(mockTransactions);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTransactions();
+  }, [user]);
   
   // Filter transactions based on search term
   const filteredTransactions = data.filter(transaction => {
@@ -56,24 +108,157 @@ const TransactionTable = () => {
     setIsEditDialogOpen(true);
   };
   
-  const handleDelete = (id: number) => {
-    setData(data.filter(transaction => transaction.id !== id));
-    toast.success('Transaction deleted successfully');
+  const handleDelete = async (id: number | string) => {
+    if (!user) {
+      setData(data.filter(transaction => transaction.id !== id));
+      toast.success('Transaction deleted successfully');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Error deleting transaction:', error);
+        toast.error('Failed to delete transaction');
+        return;
+      }
+
+      setData(data.filter(transaction => transaction.id !== id));
+      toast.success('Transaction deleted successfully');
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('An unexpected error occurred');
+    }
   };
   
-  const handleAddTransaction = (newTransaction: Omit<Transaction, 'id'>) => {
-    const id = Math.max(...data.map(t => t.id), 0) + 1;
-    setData([{ ...newTransaction, id }, ...data]);
-    setIsAddDialogOpen(false);
-    toast.success('Transaction added successfully');
+  const handleAddTransaction = async (newTransaction: Omit<Transaction, 'id'>) => {
+    if (!user) {
+      const mockId = Math.max(...data.map(t => typeof t.id === 'number' ? t.id : 0), 0) + 1;
+      setData([{ ...newTransaction, id: mockId }, ...data]);
+      setIsAddDialogOpen(false);
+      toast.success('Transaction added successfully');
+      return;
+    }
+
+    try {
+      // Format the data for Supabase
+      const { error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          date: newTransaction.date,
+          type: newTransaction.type,
+          asset_name: newTransaction.assetName,
+          asset_symbol: newTransaction.assetSymbol,
+          quantity: newTransaction.quantity,
+          price: newTransaction.price,
+          total: newTransaction.total,
+          notes: newTransaction.notes || null
+        });
+
+      if (error) {
+        console.error('Error adding transaction:', error);
+        toast.error('Failed to add transaction');
+        return;
+      }
+
+      // Refresh transactions after adding
+      const { data: updatedTransactions, error: fetchError } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
+
+      if (fetchError) {
+        console.error('Error fetching updated transactions:', fetchError);
+      } else {
+        // Map the Supabase data format to our component's format
+        const formattedTransactions = updatedTransactions.map(t => ({
+          id: t.id,
+          date: t.date,
+          type: t.type,
+          assetName: t.asset_name,
+          assetSymbol: t.asset_symbol,
+          quantity: Number(t.quantity),
+          price: Number(t.price),
+          total: Number(t.total),
+          notes: t.notes || undefined
+        }));
+        setData(formattedTransactions);
+      }
+
+      setIsAddDialogOpen(false);
+      toast.success('Transaction added successfully');
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('An unexpected error occurred');
+    }
   };
   
-  const handleUpdateTransaction = (updatedTransaction: Transaction) => {
-    setData(data.map(transaction => 
-      transaction.id === updatedTransaction.id ? updatedTransaction : transaction
-    ));
-    setIsEditDialogOpen(false);
-    toast.success('Transaction updated successfully');
+  const handleUpdateTransaction = async (updatedTransaction: Transaction) => {
+    if (!user) {
+      setData(data.map(transaction => 
+        transaction.id === updatedTransaction.id ? updatedTransaction : transaction
+      ));
+      setIsEditDialogOpen(false);
+      toast.success('Transaction updated successfully');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          date: updatedTransaction.date,
+          type: updatedTransaction.type,
+          asset_name: updatedTransaction.assetName,
+          asset_symbol: updatedTransaction.assetSymbol,
+          quantity: updatedTransaction.quantity,
+          price: updatedTransaction.price,
+          total: updatedTransaction.total,
+          notes: updatedTransaction.notes || null
+        })
+        .eq('id', updatedTransaction.id);
+
+      if (error) {
+        console.error('Error updating transaction:', error);
+        toast.error('Failed to update transaction');
+        return;
+      }
+
+      // Refresh transactions after updating
+      const { data: updatedTransactions, error: fetchError } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
+
+      if (fetchError) {
+        console.error('Error fetching updated transactions:', fetchError);
+      } else {
+        // Map the Supabase data format to our component's format
+        const formattedTransactions = updatedTransactions.map(t => ({
+          id: t.id,
+          date: t.date,
+          type: t.type,
+          assetName: t.asset_name,
+          assetSymbol: t.asset_symbol,
+          quantity: Number(t.quantity),
+          price: Number(t.price),
+          total: Number(t.total),
+          notes: t.notes || undefined
+        }));
+        setData(formattedTransactions);
+      }
+
+      setIsEditDialogOpen(false);
+      toast.success('Transaction updated successfully');
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast.error('An unexpected error occurred');
+    }
   };
   
   return (
@@ -105,7 +290,16 @@ const TransactionTable = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTransactions.length > 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center">
+                  <div className="flex justify-center items-center">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    Loading transactions...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : filteredTransactions.length > 0 ? (
               filteredTransactions.map((transaction) => (
                 <TableRow key={transaction.id}>
                   <TableCell>

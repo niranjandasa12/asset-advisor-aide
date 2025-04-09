@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -35,7 +35,7 @@ const transactionSchema = z.object({
 type TransactionFormValues = z.infer<typeof transactionSchema>;
 
 interface Transaction {
-  id: number;
+  id: number | string;
   date: string;
   type: string;
   assetName: string;
@@ -86,9 +86,9 @@ const AddTransactionForm = ({ transaction, onSubmit, onCancel }: AddTransactionF
   const watchPrice = form.watch('price');
   
   // Update total when quantity or price changes
-  useState(() => {
+  useEffect(() => {
     calculateTotal(watchQuantity || 0, watchPrice || 0);
-  });
+  }, [watchQuantity, watchPrice]);
   
   const handleSubmit = (values: TransactionFormValues) => {
     const selectedAsset = assets.find(asset => asset.symbol === values.assetSymbol);
